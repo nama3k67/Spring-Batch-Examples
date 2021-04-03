@@ -1,84 +1,59 @@
 package springbatchproject.config;
 
-import javax.sql.DataSource;
-
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
-import org.springframework.batch.core.launch.support.RunIdIncrementer;
-import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
-import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
-
-import springbatchproject.components.JobCompletionNotificationListener;
-import springbatchproject.model.Information;
-import springbatchproject.processor.InforItemProcessor;
+import springbatchproject.chunks.LineProcessor;
+import springbatchproject.chunks.LineReader;
+import springbatchproject.chunks.LineWriter;
+import springbatchproject.model.Line;
 
 @Configuration
 @EnableBatchProcessing
 public class BatchConfiguration {
 	@Autowired
-	public JobBuilderFactory jobBuilderFactory;
+	private JobBuilderFactory jobs;
 
 	@Autowired
-	public StepBuilderFactory stepBuilderFactory;
+	private StepBuilderFactory steps;
 
-	@Value("${file.input}")
-	private String fileInput;
-
-	
 	@Bean
-	public InforItemProcessor processor() {
-		return new InforItemProcessor();
-	}
-	
-	@Bean
-	public FlatFileItemReader<Information> reader() {
-		return new FlatFileItemReaderBuilder<Information>().name("InformationReader")
-				.resource(new ClassPathResource(fileInput)).delimited()
-				.names(new String[] { "name", "classes", "avgMark" })
-				.fieldSetMapper(new BeanWrapperFieldSetMapper<Information>() {
-					{
-						setTargetType(Information.class);
-					}
-				}).build();
+	public ItemReader<Line> itemReader(){
+		return new LineReader();
 	}
 
 	@Bean
-	public JdbcBatchItemWriter<Information> writer(DataSource dataSource) {
-		return new JdbcBatchItemWriterBuilder<Information>()
-				.itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-				.sql("INSERT INTO information (name, class, avg_mark, classification) VALUES (:name, :classes, :avgMark, :classification)")
-				.dataSource(dataSource).build();
+	public ItemProcessor<Line, Line> itemProcessor(){
+		return new LineProcessor();
 	}
-	
+
 	@Bean
-	public Job importUserJob(JobCompletionNotificationListener listener, Step step1) {
-		return jobBuilderFactory.get("importUserJob")
-				.incrementer(new RunIdIncrementer())
-				.listener(listener)
-				.flow(step1)
-				.end()
+	public ItemWriter<Line> itemWriter(){
+		return new LineWriter();
+	}
+
+	@Bean
+	protected Step processLines(ItemReader<Line> reader, ItemProcessor<Line, Line> processor, ItemWriter<Line> writer){
+		return steps.get("processLines").<Line, Line> chunk(2)
+				.reader(reader)
+				.processor(processor)
+				.writer(writer)
 				.build();
 	}
-	
+
 	@Bean
-	public Step step1(JdbcBatchItemWriter<Information> writer) {
-		return stepBuilderFactory.get("step1")
-	            .<Information, Information> chunk(10)
-	            .reader(reader())
-	            .processor(processor())
-	            .writer(writer)
-	            .build();
+	public Job job() {
+		return jobs
+				.get("chunksJob")
+				.start(processLines(itemReader(), itemProcessor(), itemWriter()))
+				.build();
 	}
 }
