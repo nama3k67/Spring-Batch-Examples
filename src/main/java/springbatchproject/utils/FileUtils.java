@@ -5,6 +5,7 @@ import com.opencsv.CSVWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import springbatchproject.model.Line;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -28,14 +29,10 @@ public class FileUtils {
 
     public Line readLine() {
         try {
-            if (csvReader == null) {
-                initReader();
-            }
+            if (csvReader == null) initReader();
             String[] line = csvReader.readNext();
+            if (line == null) return null;
 
-            if (line == null) {
-                return null;
-            }
             return new Line(line[0], LocalDate.parse(line[1], DateTimeFormatter.ofPattern("MM/dd/yyyy")));
         } catch (Exception e) {
             logger.error("Error while reading line in file: " + this.fileName);
@@ -45,9 +42,8 @@ public class FileUtils {
 
     public void writeLine(Line line) {
         try {
-            if (csvWriter == null) {
-                initWriter();
-            }
+            if (csvWriter == null) initWriter();
+
             String[] lineStr = new String[2];
             lineStr[0] = line.getName();
             lineStr[1] = line.getAge().toString();
@@ -59,17 +55,9 @@ public class FileUtils {
     }
 
     private void initReader() throws Exception {
-        if (file == null) {
-            file = new File(fileName);
-        }
-
-        if (fileReader == null) {
-            fileReader = new FileReader(file);
-        }
-
-        if (csvReader == null) {
-            csvReader = new CSVReader(fileReader);
-        }
+        if (file == null) file = new File(fileName);
+        if (fileReader == null) fileReader = new FileReader(file);
+        if (csvReader == null) csvReader = new CSVReader(fileReader);
     }
 
     private void initWriter() throws Exception {
@@ -77,14 +65,8 @@ public class FileUtils {
             file = new File(fileName);
             file.createNewFile();
         }
-
-        if (fileWriter == null) {
-            fileWriter = new FileWriter(file, true);
-        }
-
-        if (csvWriter == null) {
-            csvWriter = new CSVWriter(fileWriter);
-        }
+        if (fileWriter == null) fileWriter = new FileWriter(file, true);
+        if (csvWriter == null) csvWriter = new CSVWriter(fileWriter);
     }
 
     public void closeWriter() {

@@ -5,16 +5,12 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
-import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
-import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import springbatchproject.chunks.LineProcessor;
-import springbatchproject.chunks.LineReader;
-import springbatchproject.chunks.LineWriter;
-import springbatchproject.model.Line;
+import springbatchproject.tasklets.LinesProcessor;
+import springbatchproject.tasklets.LinesReader;
+import springbatchproject.tasklets.LinesWriter;
 
 @Configuration
 @EnableBatchProcessing
@@ -26,34 +22,51 @@ public class BatchConfiguration {
 	private StepBuilderFactory steps;
 
 	@Bean
-	public ItemReader<Line> itemReader(){
-		return new LineReader();
+	public LinesReader linesReader(){
+		return new LinesReader();
 	}
 
 	@Bean
-	public ItemProcessor<Line, Line> itemProcessor(){
-		return new LineProcessor();
+	public LinesProcessor linesProcessor(){
+		return new LinesProcessor();
 	}
 
 	@Bean
-	public ItemWriter<Line> itemWriter(){
-		return new LineWriter();
+	public LinesWriter linesWriter(){
+		return new LinesWriter();
 	}
 
 	@Bean
-	protected Step processLines(ItemReader<Line> reader, ItemProcessor<Line, Line> processor, ItemWriter<Line> writer){
-		return steps.get("processLines").<Line, Line> chunk(2)
-				.reader(reader)
-				.processor(processor)
-				.writer(writer)
+	protected Step readLines() {
+		return steps
+				.get("readLines")
+				.tasklet(linesReader())
+				.build();
+	}
+
+	@Bean
+	protected Step processLines() {
+		return steps
+				.get("processLines")
+				.tasklet(linesProcessor())
+				.build();
+	}
+
+	@Bean
+	protected Step writeLines() {
+		return steps
+				.get("writeLines")
+				.tasklet(linesWriter())
 				.build();
 	}
 
 	@Bean
 	public Job job() {
 		return jobs
-				.get("chunksJob")
-				.start(processLines(itemReader(), itemProcessor(), itemWriter()))
+				.get("taskletJob")
+				.start(readLines())
+				.next(processLines())
+				.next(writeLines())
 				.build();
 	}
 }
